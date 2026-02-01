@@ -55,27 +55,29 @@
 
     #copyImageBtn {
         max-width: 600px; display: block; margin: 15px auto;
-        background-color: #00c853; color: white; border: none;
+        background: linear-gradient(45deg, #00c853, #64dd17);
+        color: white; border: none;
         padding: 15px; border-radius: 10px; cursor: pointer; 
         font-weight: 900; font-size: 1.1em; width: 100%;
+        box-shadow: 0 4px 15px rgba(0,200,83,0.3);
     }
 
-    /* --- Tabla de 20 Columnas --- */
+    /* --- Tabla de 20 Columnas - Botones Pegados y Grandes --- */
     .tabla-scroll { width: 100%; overflow-x: auto; margin-top: 30px; padding-bottom: 15px; }
     #panel-cartones {
       display: grid; grid-template-columns: repeat(20, 1fr); 
-      gap: 8px; background-color: #ffffff; padding: 20px; border-radius: 15px;
+      gap: 3px; background-color: #ffffff; padding: 10px; border-radius: 10px;
       min-width: 1400px; margin: 0 auto;
     }
 
     .carton-btn {
-      aspect-ratio: 1/1; background: #fff; border: 2px solid #ddd;
-      color: #000; font-weight: 900; font-size: 1.8em; 
-      cursor: pointer; border-radius: 8px; transition: 0.2s;
+      aspect-ratio: 1/1; background: #fff; border: 1px solid #eee;
+      color: #000; font-weight: 900; font-size: 2.2em; 
+      cursor: pointer; border-radius: 4px; transition: 0.1s;
       display: flex; align-items: center; justify-content: center;
     }
-    .carton-btn.selected { background-color: #fdd835; border-color: #000; transform: scale(1.1); z-index: 5; }
-    .carton-btn.vendido { opacity: 0.05; pointer-events: none; }
+    .carton-btn.selected { background-color: #fdd835; border-color: #000; transform: scale(1.1); z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+    .carton-btn.vendido { opacity: 0.03; pointer-events: none; }
 
     @media (min-width: 600px) {
       .header { flex-direction: row; justify-content: center; }
@@ -87,14 +89,16 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
   <script>
+    // Configuración de Firebase solicitada
     const firebaseConfig = {
-      apiKey: "AIzaSyB5xALU6YUQh8L9xXzCOqvjQIetErPVuEk",
-      authDomain: "williamcartonesdomingo.firebaseapp.com",
-      projectId: "williamcartonesdomingo",
-      storageBucket: "williamcartonesdomingo.firebasestorage.app",
-      messagingSenderId: "1049456250221",
-      appId: "1:1049456250221:web:5b8767ee38219c0aad5e64",
-      measurementId: "G-EFF881R8L0"
+      apiKey: "AIzaSyDJM-etvBivmHHGDwSeSnH8FdqtFMuu09I",
+      authDomain: "lista-y-cartones-de-bingo.firebaseapp.com",
+      databaseURL: "https://lista-y-cartones-de-bingo-default-rtdb.firebaseio.com",
+      projectId: "lista-y-cartones-de-bingo",
+      storageBucket: "lista-y-cartones-de-bingo.firebasestorage.app",
+      messagingSenderId: "426229433294",
+      appId: "1:426229433294:web:2e98ccae6922d36c02219f",
+      measurementId: "G-4EBZVQC5YD"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
@@ -112,8 +116,8 @@
   <label>Nombre del Jugador:</label>
   <input type="text" id="nombre" required placeholder="Nombre del cliente" />
 
-  <label>Cartones (Toca abajo o pega lista):</label>
-  <input type="text" id="cartonesSeleccionados" placeholder="Solo números disponibles del 1 al 530" />
+  <label>Cartones (Toca abajo):</label>
+  <input type="text" id="cartonesSeleccionados" readonly placeholder="Toca los números en la tabla" />
 
   <label>Cartones Pendientes:</label>
   <input type="number" id="pendientes" value="0" min="0" />
@@ -127,7 +131,7 @@
   <button type="submit" id="comprarBtn">REGISTRAR COMPRA</button>
 </form>
 
-<button id="copyImageBtn">📸 COPIAR TABLA PARA WHATSAPP</button>
+<button id="copyImageBtn">📸 COPIAR TABLA + TEXTO PARA WHATSAPP</button>
 
 <div class="tabla-scroll">
   <div id="panel-cartones"></div>
@@ -135,7 +139,7 @@
 
 <script>
   const TOTAL_CARTONES = 530;
-  const PRECIO_CARTON = 100;
+  const PRECIO_CARTON = 350; // Ajustado a 350 según conversiones previas
   const panel = document.getElementById('panel-cartones');
   const seleccionadosInput = document.getElementById('cartonesSeleccionados');
   const montoInput = document.getElementById('monto');
@@ -145,15 +149,20 @@
   let vendidos = new Set();
 
   async function cargarVendidos() {
-    try {
-      const snap = await db.collection('registrosCartones').get();
-      snap.forEach(doc => {
-        const n = parseInt(doc.id);
-        vendidos.add(n);
-        const btn = document.querySelector(`[data-numero="${n}"]`);
-        if (btn) btn.classList.add('vendido');
+    // Uso onSnapshot para que se actualice solo sin recargar la página
+    db.collection('registrosCartones').onSnapshot(snap => {
+      vendidos.clear();
+      snap.forEach(doc => vendidos.add(parseInt(doc.id)));
+      document.querySelectorAll('.carton-btn').forEach(btn => {
+        const n = parseInt(btn.dataset.numero);
+        if (vendidos.has(n)) {
+          btn.classList.add('vendido');
+          btn.classList.remove('selected');
+        } else {
+          btn.classList.remove('vendido');
+        }
       });
-    } catch (e) { console.error(e); }
+    });
   }
 
   for (let i = 1; i <= TOTAL_CARTONES; i++) {
@@ -180,43 +189,6 @@
     actualizarTotales();
   }
 
-  // LÓGICA DE FILTRADO ESTRICTO
-  seleccionadosInput.oninput = function() {
-    // 1. Quitar letras al instante
-    this.value = this.value.replace(/[^0-9,\-\/ ]/g, ''); 
-    
-    const nums = this.value.match(/\d+/g) || [];
-    seleccionados.clear();
-    
-    // Limpiar visual de botones
-    document.querySelectorAll('.carton-btn').forEach(b => { 
-        if(!b.classList.contains('vendido')) b.classList.remove('selected'); 
-    });
-
-    let huboVendidos = false;
-
-    nums.forEach(str => {
-      const n = parseInt(str);
-      // 2. Solo permitir números del 1 al 530 y que NO estén vendidos
-      if (n >= 1 && n <= TOTAL_CARTONES) {
-        if (!vendidos.has(n)) {
-          seleccionados.add(n);
-          const btn = document.querySelector(`[data-numero="${n}"]`);
-          if (btn) btn.classList.add('selected');
-        } else {
-          huboVendidos = true;
-        }
-      }
-    });
-
-    // 3. Auto-borrar del campo si hubo números vendidos o inválidos
-    if (huboVendidos) {
-      this.value = Array.from(seleccionados).sort((a,b)=>a-b).join(', ');
-    }
-    
-    actualizarTotales();
-  };
-
   function actualizarTotales() {
     const p = parseInt(pendientesInput.value) || 0;
     montoInput.value = (seleccionados.size + p) * PRECIO_CARTON;
@@ -228,9 +200,10 @@
     const ctx = canvas.getContext('2d');
     const cols = 20;
     const rows = Math.ceil(TOTAL_CARTONES / cols);
-    const cellSize = 70; const pad = 10;
+    const cellSize = 75; const pad = 5;
     canvas.width = cols * (cellSize + pad) + pad;
     canvas.height = 100 + rows * (cellSize + pad) + pad;
+    
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000'; ctx.font = 'bold 35px Nunito'; ctx.textAlign = 'center';
     ctx.fillText('CARTONES DISPONIBLES', canvas.width/2, 60);
@@ -239,15 +212,24 @@
       if (vendidos.has(i)) continue;
       const col = (i - 1) % cols; const row = Math.floor((i - 1) / cols);
       const x = col * (cellSize + pad) + pad; const y = 100 + row * (cellSize + pad) + pad;
-      ctx.strokeStyle = '#ddd'; ctx.strokeRect(x, y, cellSize, cellSize);
-      ctx.fillStyle = '#000'; ctx.font = '900 24px Nunito'; ctx.textAlign = 'center';
+      ctx.strokeStyle = '#eee'; ctx.strokeRect(x, y, cellSize, cellSize);
+      ctx.fillStyle = '#000'; ctx.font = '900 28px Nunito'; ctx.textAlign = 'center';
       ctx.textBaseline = 'middle'; ctx.fillText(i.toString(), x + cellSize/2, y + cellSize/2);
     }
+
+    const textoMensaje = "CARTONES DISPONIBLES: HAZ ZOOM PARA MIRARLOS 🔎✨";
+
     canvas.toBlob(async blob => {
       try {
-        await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
-        alert("✅ Tabla copiada con éxito.");
-      } catch (e) { alert("❌ Error: Necesitas HTTPS para copiar."); }
+        const data = [
+          new ClipboardItem({
+            'image/png': blob,
+            'text/plain': new Blob([textoMensaje], { type: 'text/plain' })
+          })
+        ];
+        await navigator.clipboard.write(data);
+        alert("✅ Imagen y Texto copiados para WhatsApp.");
+      } catch (e) { alert("❌ Error: Necesitas HTTPS."); }
     });
   };
 
@@ -262,13 +244,13 @@
       batch.set(db.collection('registrosPagos').doc(), {
         nombre, monto: montoInput.value, referencia: document.getElementById('referencia').value,
         cartones: Array.from(seleccionados), pendientes: parseInt(pendientesInput.value) || 0,
-        timestamp: new Date()
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
       await batch.commit();
       alert("¡Registro guardado!");
       location.reload();
     } catch (err) {
-      alert("Error al guardar. Revisa tus reglas en Firebase.");
+      alert("Error al guardar.");
       btn.disabled = false;
     }
   };
