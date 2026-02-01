@@ -62,7 +62,7 @@
         box-shadow: 0 4px 15px rgba(0,200,83,0.3);
     }
 
-    /* --- Tabla de 20 Columnas - Botones Pegados y Grandes --- */
+    /* --- Tabla Compacta Gigante --- */
     .tabla-scroll { width: 100%; overflow-x: auto; margin-top: 30px; padding-bottom: 15px; }
     #panel-cartones {
       display: grid; grid-template-columns: repeat(20, 1fr); 
@@ -89,7 +89,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
   <script>
-    // Configuración de Firebase solicitada
     const firebaseConfig = {
       apiKey: "AIzaSyDJM-etvBivmHHGDwSeSnH8FdqtFMuu09I",
       authDomain: "lista-y-cartones-de-bingo.firebaseapp.com",
@@ -116,8 +115,8 @@
   <label>Nombre del Jugador:</label>
   <input type="text" id="nombre" required placeholder="Nombre del cliente" />
 
-  <label>Cartones (Toca abajo):</label>
-  <input type="text" id="cartonesSeleccionados" readonly placeholder="Toca los números en la tabla" />
+  <label>Cartones (Toca abajo o pega lista):</label>
+  <input type="text" id="cartonesSeleccionados" placeholder="Escribe o pega números aquí" />
 
   <label>Cartones Pendientes:</label>
   <input type="number" id="pendientes" value="0" min="0" />
@@ -139,7 +138,7 @@
 
 <script>
   const TOTAL_CARTONES = 530;
-  const PRECIO_CARTON = 350; // Ajustado a 350 según conversiones previas
+  const PRECIO_CARTON = 350;
   const panel = document.getElementById('panel-cartones');
   const seleccionadosInput = document.getElementById('cartonesSeleccionados');
   const montoInput = document.getElementById('monto');
@@ -149,22 +148,29 @@
   let vendidos = new Set();
 
   async function cargarVendidos() {
-    // Uso onSnapshot para que se actualice solo sin recargar la página
     db.collection('registrosCartones').onSnapshot(snap => {
       vendidos.clear();
       snap.forEach(doc => vendidos.add(parseInt(doc.id)));
-      document.querySelectorAll('.carton-btn').forEach(btn => {
+      actualizarVisualTablero();
+    });
+  }
+
+  function actualizarVisualTablero() {
+    document.querySelectorAll('.carton-btn').forEach(btn => {
         const n = parseInt(btn.dataset.numero);
         if (vendidos.has(n)) {
           btn.classList.add('vendido');
           btn.classList.remove('selected');
-        } else {
+        } else if (seleccionados.has(n)) {
+          btn.classList.add('selected');
           btn.classList.remove('vendido');
+        } else {
+          btn.classList.remove('vendido', 'selected');
         }
       });
-    });
   }
 
+  // Generar Tablero
   for (let i = 1; i <= TOTAL_CARTONES; i++) {
     const btn = document.createElement('button');
     btn.className = 'carton-btn';
@@ -174,20 +180,45 @@
       if (vendidos.has(i)) return;
       if (seleccionados.has(i)) {
         seleccionados.delete(i);
-        btn.classList.remove('selected');
       } else {
         seleccionados.add(i);
-        btn.classList.add('selected');
       }
-      actualizarInputManual();
+      actualizarInputDesdeSeleccion();
     };
     panel.appendChild(btn);
   }
 
-  function actualizarInputManual() {
+  function actualizarInputDesdeSeleccion() {
     seleccionadosInput.value = Array.from(seleccionados).sort((a,b)=>a-b).join(', ');
+    actualizarVisualTablero();
     actualizarTotales();
   }
+
+  // REINSTALADA: Lógica para escribir o pegar números
+  seleccionadosInput.oninput = function() {
+    this.value = this.value.replace(/[^0-9,\-\/ ]/g, ''); 
+    const nums = this.value.match(/\d+/g) || [];
+    seleccionados.clear();
+    
+    let huboVendidos = false;
+    nums.forEach(str => {
+      const n = parseInt(str);
+      if (n >= 1 && n <= TOTAL_CARTONES) {
+        if (!vendidos.has(n)) {
+          seleccionados.add(n);
+        } else {
+          huboVendidos = true;
+        }
+      }
+    });
+
+    if (huboVendidos) {
+      // Opcional: podrías alertar aquí que algunos ya estaban vendidos
+    }
+    
+    actualizarVisualTablero();
+    actualizarTotales();
+  };
 
   function actualizarTotales() {
     const p = parseInt(pendientesInput.value) || 0;
@@ -195,41 +226,30 @@
   }
   pendientesInput.oninput = actualizarTotales;
 
+  // Copiar para WhatsApp
   document.getElementById('copyImageBtn').onclick = async () => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const cols = 20;
-    const rows = Math.ceil(TOTAL_CARTONES / cols);
+    const cols = 20; const rows = Math.ceil(TOTAL_CARTONES / cols);
     const cellSize = 75; const pad = 5;
     canvas.width = cols * (cellSize + pad) + pad;
     canvas.height = 100 + rows * (cellSize + pad) + pad;
-    
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#000'; ctx.font = 'bold 35px Nunito'; ctx.textAlign = 'center';
     ctx.fillText('CARTONES DISPONIBLES', canvas.width/2, 60);
-
     for (let i = 1; i <= TOTAL_CARTONES; i++) {
       if (vendidos.has(i)) continue;
       const col = (i - 1) % cols; const row = Math.floor((i - 1) / cols);
       const x = col * (cellSize + pad) + pad; const y = 100 + row * (cellSize + pad) + pad;
       ctx.strokeStyle = '#eee'; ctx.strokeRect(x, y, cellSize, cellSize);
-      ctx.fillStyle = '#000'; ctx.font = '900 28px Nunito'; ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle'; ctx.fillText(i.toString(), x + cellSize/2, y + cellSize/2);
+      ctx.fillStyle = '#000'; ctx.font = '900 28px Nunito'; ctx.textBaseline = 'middle';
+      ctx.fillText(i.toString(), x + cellSize/2, y + cellSize/2);
     }
-
     const textoMensaje = "CARTONES DISPONIBLES: HAZ ZOOM PARA MIRARLOS 🔎✨";
-
     canvas.toBlob(async blob => {
-      try {
-        const data = [
-          new ClipboardItem({
-            'image/png': blob,
-            'text/plain': new Blob([textoMensaje], { type: 'text/plain' })
-          })
-        ];
-        await navigator.clipboard.write(data);
-        alert("✅ Imagen y Texto copiados para WhatsApp.");
-      } catch (e) { alert("❌ Error: Necesitas HTTPS."); }
+      const data = [new ClipboardItem({'image/png': blob, 'text/plain': new Blob([textoMensaje], {type:'text/plain'})})];
+      await navigator.clipboard.write(data);
+      alert("✅ ¡Copiado!");
     });
   };
 
@@ -247,12 +267,8 @@
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
       await batch.commit();
-      alert("¡Registro guardado!");
       location.reload();
-    } catch (err) {
-      alert("Error al guardar.");
-      btn.disabled = false;
-    }
+    } catch (err) { alert("Error"); btn.disabled = false; }
   };
 
   cargarVendidos();
