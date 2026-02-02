@@ -107,7 +107,7 @@
 
 <div class="header">
   <div class="logo-mago">🧙‍♂️</div> 
-  <h1>✨ BINGO MAGIC DIA/DIA (630)</h1>
+  <h1>✨ BINGO MÁGICO (530)</h1>
   <button class="registro-nav-btn" onclick="window.location.href='registro.html'">Ver Registros</button>
 </div>
 
@@ -115,8 +115,8 @@
   <label>Nombre del Jugador:</label>
   <input type="text" id="nombre" required placeholder="Nombre del cliente" />
 
-  <label>Cartones (Toca abajo o pega lista):</label>
-  <input type="text" id="cartonesSeleccionados" placeholder="Escribe o pega números aquí" />
+  <label>Cartones (Escribe, pega lista o toca abajo):</label>
+  <input type="text" id="cartonesSeleccionados" placeholder="Ej: 1, 45, 120" autocomplete="off" />
 
   <label>Cartones Pendientes:</label>
   <input type="number" id="pendientes" value="0" min="0" />
@@ -137,8 +137,8 @@
 </div>
 
 <script>
-  const TOTAL_CARTONES = 630;
-  const PRECIO_CARTON = 150;
+  const TOTAL_CARTONES = 530;
+  const PRECIO_CARTON = 350;
   const panel = document.getElementById('panel-cartones');
   const seleccionadosInput = document.getElementById('cartonesSeleccionados');
   const montoInput = document.getElementById('monto');
@@ -170,7 +170,6 @@
       });
   }
 
-  // Generar Tablero
   for (let i = 1; i <= TOTAL_CARTONES; i++) {
     const btn = document.createElement('button');
     btn.className = 'carton-btn';
@@ -194,27 +193,27 @@
     actualizarTotales();
   }
 
-  // REINSTALADA: Lógica para escribir o pegar números
+  // --- LÓGICA DE FILTRADO ESTRICTO ---
   seleccionadosInput.oninput = function() {
+    // Permitir solo números y separadores
     this.value = this.value.replace(/[^0-9,\-\/ ]/g, ''); 
     const nums = this.value.match(/\d+/g) || [];
-    seleccionados.clear();
     
-    let huboVendidos = false;
+    seleccionados.clear();
+    let listaFiltrada = [];
+
     nums.forEach(str => {
       const n = parseInt(str);
       if (n >= 1 && n <= TOTAL_CARTONES) {
         if (!vendidos.has(n)) {
           seleccionados.add(n);
-        } else {
-          huboVendidos = true;
+          listaFiltrada.push(n);
         }
       }
     });
 
-    if (huboVendidos) {
-      // Opcional: podrías alertar aquí que algunos ya estaban vendidos
-    }
+    // Actualizar el valor del input para eliminar números vendidos al instante
+    this.value = Array.from(new Set(listaFiltrada)).sort((a,b)=>a-b).join(', ');
     
     actualizarVisualTablero();
     actualizarTotales();
@@ -247,9 +246,11 @@
     }
     const textoMensaje = "CARTONES DISPONIBLES: HAZ ZOOM PARA MIRARLOS 🔎✨";
     canvas.toBlob(async blob => {
-      const data = [new ClipboardItem({'image/png': blob, 'text/plain': new Blob([textoMensaje], {type:'text/plain'})})];
-      await navigator.clipboard.write(data);
-      alert("✅ ¡Copiado!");
+      try {
+        const data = [new ClipboardItem({'image/png': blob, 'text/plain': new Blob([textoMensaje], {type:'text/plain'})})];
+        await navigator.clipboard.write(data);
+        alert("✅ Imagen y Texto filtrado copiados.");
+      } catch (e) { alert("Error: Usa HTTPS."); }
     });
   };
 
@@ -275,4 +276,3 @@
 </script>
 </body>
 </html>
-
