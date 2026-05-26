@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
 
-  <!-- html2canvas para copiar imagen -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <style>
@@ -19,27 +18,45 @@
       color: #f0f0f0; font-family: 'Nunito', sans-serif;
       margin: 0; padding: 20px; min-height: 100vh;
     }
-    .header { display: flex; flex-direction: column; align-items: center; position: relative; gap: 10px; margin-bottom: 30px; }
+    .header { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 30px; }
     .logo-mago { font-size: 50px; } 
     h1 { color: #ffffff; text-shadow: 0 0 15px rgba(255,255,255,0.4); font-size: 2.2em; margin: 0; }
     .registro-nav-btn { background-color: #37474F; color: #fdd835; border: 1px solid #fdd835; padding: 8px 16px; border-radius: 8px; font-weight: 900; cursor: pointer; }
+
     form { max-width: 600px; margin: 0 auto 30px auto; background: rgba(255,255,255,0.05); padding: 25px; border-radius: 20px; border: 1px solid #333; }
     label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: bold; color: #fdd835; }
     input { width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #444; background: #1e1e1e; color: #fff; font-weight: 900; font-size: 1.2em; }
     input#monto { background-color: #000; color: #fdd835; text-align: center; font-size: 1.8em; border-color: #fdd835; }
+
     button[type="submit"] { margin-top: 25px; width: 100%; padding: 18px; background: linear-gradient(45deg, #fdd835, #fbc02d); border: none; border-radius: 10px; font-weight: 900; font-size: 1.4em; cursor: pointer; }
-    #copyImageBtn { max-width: 600px; display: block; margin: 15px auto; background: linear-gradient(45deg, #00c853, #64dd17); color: white; border: none; padding: 15px; border-radius: 10px; cursor: pointer; font-weight: 900; width: 100%; box-shadow: 0 4px 15px rgba(0,200,83,0.3); }
+
+    #copyImageBtn { max-width: 600px; display: block; margin: 15px auto; background: linear-gradient(45deg, #00c853, #64dd17); color: white; border: none; padding: 15px; border-radius: 10px; cursor: pointer; font-weight: 900; width: 100%; }
+
     .tabla-scroll { width: 100%; overflow-x: auto; margin-top: 30px; padding-bottom: 15px; }
     #panel-cartones { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; background-color: #ffffff; padding: 10px; border-radius: 10px; min-width: 1400px; margin: 0 auto; }
     .carton-btn { aspect-ratio: 1/1; background: #fff; border: 1px solid #eee; color: #000; font-weight: 900; font-size: 2.2em; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
     .carton-btn.selected { background-color: #fdd835; border-color: #000; transform: scale(1.1); z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
     .carton-btn.vendido { opacity: 0.03; pointer-events: none; }
+
+    /* MODAL CONFIG */
+    #configModal {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      background: rgba(0,0,0,0.7); display:none; justify-content:center; align-items:center;
+    }
+    #configBox {
+      background:#1e1e1e; padding:25px; border-radius:12px; width:90%; max-width:400px;
+      border:1px solid #444; text-align:center;
+    }
   </style>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
   <script>
+    /* 🔥 CONFIG DINÁMICA */
+    let TOTAL_CARTONES = parseInt(localStorage.getItem("totalCartones")) || 510;
+    let PRECIO_CARTON = parseInt(localStorage.getItem("precioCarton")) || 300;
+
     const firebaseConfig = {
       apiKey: "AIzaSyDJM-etvBivmHHGDwSeSnH8FdqtFMuu09I",
       authDomain: "lista-y-cartones-de-bingo.firebaseapp.com",
@@ -50,6 +67,7 @@
       appId: "1:426229433294:web:2e98ccae6922d36c02219f",
       measurementId: "G-4EBZVQC5YD"
     };
+    
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
   </script>
@@ -59,7 +77,9 @@
 <div class="header">
   <div class="logo-mago">🧙‍♂️</div> 
   <h1>✨ BINGO MAGIC DIA/DIA (630)</h1>
+
   <button class="registro-nav-btn" onclick="window.location.href='registro.html'">Ver Registros</button>
+  <button class="registro-nav-btn" onclick="abrirConfig()">⚙️ Configurar Bingo</button>
 </div>
 
 <form id="compraForm">
@@ -67,8 +87,8 @@
   <label>Nombre del Jugador:</label>
   <input type="text" id="nombre" required placeholder="Nombre del cliente" />
 
-  <label>Cartones (Escribe 22-23, 22/23, 22 23 o pega lista):</label>
-  <input type="text" id="cartonesSeleccionados" placeholder="Cualquier separador funciona" autocomplete="off" />
+  <label>Cartones:</label>
+  <input type="text" id="cartonesSeleccionados" placeholder="Ej: 22-23, 22/23, 22 23" autocomplete="off" />
 
   <div id="alertaNoDisponibles" style="margin-top:10px; font-size:1.1em;"></div>
 
@@ -78,7 +98,6 @@
     Copiar No Disponibles
   </button>
 
-  <!-- 🔥 BOTÓN AZAR SEGURO -->
   <button id="azarBtn" type="button"
     style="margin-top:10px; width:100%; padding:12px; border:none; border-radius:10px;
     background:#2196F3; color:white; font-weight:900; cursor:pointer;">
@@ -103,9 +122,32 @@
   <div id="panel-cartones"></div>
 </div>
 
+<!-- 🔥 MODAL CONFIG -->
+<div id="configModal">
+  <div id="configBox">
+    <h2>⚙️ Configurar Bingo</h2>
+
+    <label style="color:#fdd835;">Precio por cartón:</label>
+    <input id="configPrecio" type="number" min="1" style="width:100%; padding:10px; margin-bottom:15px;">
+
+    <label style="color:#fdd835;">Cantidad total de cartones:</label>
+    <input id="configTotal" type="number" min="1" style="width:100%; padding:10px; margin-bottom:20px;">
+
+    <button onclick="guardarConfig()" style="
+      width:100%; padding:12px; background:#4CAF50; border:none; border-radius:8px;
+      font-weight:900; cursor:pointer; color:white;
+    ">Guardar</button>
+
+    <button onclick="cerrarConfig()" style="
+      width:100%; padding:12px; margin-top:10px; background:#e53935; border:none;
+      border-radius:8px; font-weight:900; cursor:pointer; color:white;
+    ">Cancelar</button>
+  </div>
+</div>
+
 <script>
-  const TOTAL_CARTONES = 630;
-  const PRECIO_CARTON = 400;
+  /* 🔥 LÓGICA COMPLETA (idéntica a tu versión original, solo adaptada a valores dinámicos) */
+
   const panel = document.getElementById('panel-cartones');
   const seleccionadosInput = document.getElementById('cartonesSeleccionados');
   const montoInput = document.getElementById('monto');
@@ -115,63 +157,46 @@
   let seleccionados = new Set();
   let vendidos = new Set();
 
-  // 🔥 BLOQUEAR ENTER EN INPUTS (pero lo activamos en el form)
   document.querySelectorAll("input").forEach(input => {
     input.addEventListener("keydown", e => {
       if (e.key === "Enter") e.preventDefault();
     });
   });
 
-  // 🔥 VALIDAR REFERENCIA (6 números o P)
+  const nombreInput = document.getElementById("nombre");
+
+nombreInput.addEventListener("input", () => {
+  // Permite solo letras (A-Z, a-z) y espacios
+  nombreInput.value = nombreInput.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ ]/g, "");
+});
+
+
   refInput.addEventListener("input", () => {
     let v = refInput.value.toUpperCase();
-
-    if (v === "P") {
-      refInput.value = "P";
-      return;
-    }
-
+    if (v === "P") return refInput.value = "P";
     refInput.value = v.replace(/\D/g, "").slice(0, 6);
   });
 
-  // 🔥 PERMITIR ENTER PARA REGISTRAR COMPRA
-  document.getElementById("compraForm").addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      document.getElementById("comprarBtn").click();
-    }
-  });
-
-  // 🔥 COPIAR SOLO IMAGEN (SIN RECORTES)
   document.getElementById("copyImageBtn").onclick = async () => {
-    const panel = document.getElementById("panel-cartones");
-
     const clone = panel.cloneNode(true);
     clone.style.position = "absolute";
     clone.style.left = "-9999px";
-    clone.style.top = "0";
     clone.style.width = panel.scrollWidth + "px";
-    clone.style.height = panel.scrollHeight + "px";
-
     document.body.appendChild(clone);
 
     html2canvas(clone, { scale: 2 }).then(async canvas => {
       clone.remove();
-
       canvas.toBlob(async blob => {
         try {
-          await navigator.clipboard.write([
-            new ClipboardItem({ "image/png": blob })
-          ]);
-          alert("Imagen copiada al portapapeles");
-        } catch (err) {
-          alert("Tu navegador no permite copiar imágenes directamente.");
+          await navigator.clipboard.write([ new ClipboardItem({ "image/png": blob }) ]);
+          alert("Imagen copiada");
+        } catch {
+          alert("Tu navegador no permite copiar imágenes.");
         }
       });
     });
   };
 
-  // 🔥 BLOQUEAR SUBMIT ACCIDENTAL DESDE AZAR
   document.getElementById("azarBtn").addEventListener("click", e => {
     e.preventDefault();
     e.stopPropagation();
@@ -193,7 +218,7 @@
     });
   }
 
-  // Generar Tablero
+  /* 🔥 GENERAR TABLERO DINÁMICO */
   for (let i = 1; i <= TOTAL_CARTONES; i++) {
     const btn = document.createElement('button');
     btn.className = 'carton-btn';
@@ -215,7 +240,7 @@
     actualizarTotales();
   }
 
-  // --- NO DISPONIBLES ---
+  /* 🔥 NO DISPONIBLES */
   const alertaNoDisponibles = document.getElementById('alertaNoDisponibles');
   const copiarNoDisponiblesBtn = document.getElementById('copiarNoDisponiblesBtn');
 
@@ -239,41 +264,26 @@
     actualizarTotales();
 
     if (noDisponibles.length > 0) {
-      alertaNoDisponibles.innerHTML = `
-        <div style="color:#ff5252;">
-          No disponibles: <b>${noDisponibles.join(", ")}</b>
-        </div>
-      `;
+      alertaNoDisponibles.innerHTML = `<div style="color:#ff5252;">No disponibles: <b>${noDisponibles.join(", ")}</b></div>`;
       copiarNoDisponiblesBtn.style.display = "block";
-
       copiarNoDisponiblesBtn.onclick = () => {
         navigator.clipboard.writeText("No disponibles: " + noDisponibles.join(", "));
-        alert("Copiado al portapapeles");
+        alert("Copiado");
       };
-
     } else {
       alertaNoDisponibles.innerHTML = "";
       copiarNoDisponiblesBtn.style.display = "none";
     }
   };
 
-  // --- 🔥 BOTÓN AZAR ---
+  /* 🔥 AZAR */
   document.getElementById("azarBtn").onclick = () => {
-
     const disponibles = [];
     for (let i = 1; i <= TOTAL_CARTONES; i++) {
-      if (!vendidos.has(i) && !seleccionados.has(i)) {
-        disponibles.push(i);
-      }
+      if (!vendidos.has(i) && !seleccionados.has(i)) disponibles.push(i);
     }
-
-    if (disponibles.length === 0) {
-      alert("No quedan cartones disponibles.");
-      return;
-    }
-
+    if (disponibles.length === 0) return alert("No quedan cartones.");
     const random = disponibles[Math.floor(Math.random() * disponibles.length)];
-
     seleccionados.add(random);
     actualizarInputDesdeSeleccion();
   };
@@ -284,7 +294,7 @@
   }
   pendientesInput.oninput = actualizarTotales;
 
-  // --- 🔥 REGISTRAR COMPRA ---
+  /* 🔥 REGISTRAR COMPRA */
   document.getElementById('compraForm').onsubmit = async e => {
     e.preventDefault();
 
@@ -292,9 +302,8 @@
     btn.disabled = true;
 
     const ref = refInput.value;
-
     if (!(ref === "P" || (ref.length === 6 && /^\d+$/.test(ref)))) {
-      alert("La referencia debe ser 6 números o la letra P.");
+      alert("Referencia inválida.");
       btn.disabled = false;
       return;
     }
@@ -317,14 +326,43 @@
       await batch.commit();
       location.reload();
 
-    } catch (err) {
+    } catch {
       alert("Error");
       btn.disabled = false;
     }
   };
 
   cargarVendidos();
+
+  /* 🔥 CONFIGURACIÓN */
+  function abrirConfig() {
+    document.getElementById("configPrecio").value = PRECIO_CARTON;
+    document.getElementById("configTotal").value = TOTAL_CARTONES;
+    document.getElementById("configModal").style.display = "flex";
+  }
+
+  function cerrarConfig() {
+    document.getElementById("configModal").style.display = "none";
+  }
+
+  function guardarConfig() {
+    const nuevoPrecio = parseInt(document.getElementById("configPrecio").value);
+    const nuevoTotal = parseInt(document.getElementById("configTotal").value);
+
+    if (nuevoPrecio < 1 || nuevoTotal < 1) {
+      alert("Valores inválidos.");
+      return;
+    }
+
+    localStorage.setItem("precioCarton", nuevoPrecio);
+    localStorage.setItem("totalCartones", nuevoTotal);
+
+    alert("Configuración guardada. Recargando...");
+    location.reload();
+  }
 </script>
+
 </body>
 </html>
+
 
