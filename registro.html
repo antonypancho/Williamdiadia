@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Registro de Compras - William Cartones</title>
+<title>Registro de Compras - William/dia Cartones</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -93,17 +93,8 @@
       transform: translateY(-2px);
   }
 
-  /* ✔️ DUPLICADOS EN AMARILLO */
-  .referencia-duplicada {
-      color: #ffeb3b !important;
-      font-weight: 900;
-  }
-
-  /* ✔️ VERIFICADOS EN VERDE */
-  .referencia-verificada {
-      color: #00e676 !important;
-      font-weight: 900;
-  }
+  .referencia-duplicada { color: #ffeb3b !important; font-weight: 900; }
+  .referencia-verificada { color: #00e676 !important; font-weight: 900; }
   
   .resumen { 
       text-align: center; 
@@ -169,15 +160,14 @@
   .delete-btn { background: #e53935; color: white; padding: 4px 10px; border-radius: 4px; border: none; cursor: pointer; }
 </style>
 
-<!-- FIREBASE -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-<!-- XLSX -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-  const PRECIO_CARTON = 400; 
+  /* 🔥 CONFIG DINÁMICA */
+  let PRECIO_CARTON = parseInt(localStorage.getItem("precioCarton")) || 300;
+  let TOTAL_CARTONES = parseInt(localStorage.getItem("totalCartones")) || 510;
 
   const firebaseConfig = {
     apiKey: "AIzaSyDJM-etvBivmHHGDwSeSnH8FdqtFMuu09I",
@@ -198,8 +188,14 @@
       return /^\d+$/.test(referencia.trim());
   }
 
+  document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("precioActual").textContent = PRECIO_CARTON;
+      document.getElementById("totalActual").textContent = TOTAL_CARTONES;
+      document.getElementById("totalActualHeader").textContent = TOTAL_CARTONES;
+  });
+
   async function cargarRegistros() {
-    const registros = {};
+    let registros = {};
     let totalMonto = 0;
     let totalPendientes = 0; 
     let totalApartados = 0;
@@ -207,14 +203,18 @@
     const referencias = {};
     const duplicadas = new Set();
 
-    const snapshotCartones = await db.collection('registrosCartones').get();
-    snapshotCartones.forEach(doc => { registros[doc.id] = doc.data().nombre; });
-
-    const cartonesOrdenados = Object.keys(registros).map(Number).sort((a,b) => a-b);
+    /* 🔥 LISTA DE JUGADORES */
+    db.collection('registrosCartones').onSnapshot(snapshotCartones => {
+        registros = {};
+        snapshotCartones.forEach(doc => {
+            registros[doc.id] = doc.data().nombre;
+        });
+        actualizarTablaJugadores(registros);
+    });
 
     const snapshotPagos = await db.collection('registrosPagos').orderBy('timestamp', 'desc').get();
 
-    // 🔥 PRIMER PASO: detectar duplicados
+    /* 🔥 DETECTAR DUPLICADOS DE REFERENCIA */
     snapshotPagos.forEach(doc => {
         const ref = doc.data().referencia;
         if (!referencias[ref]) referencias[ref] = 0;
@@ -227,6 +227,31 @@
     tbodyPagos.innerHTML = '';
     tbodyApartados.innerHTML = '';
 
+    /* 🔥 DETECTOR DE CARTONES DUPLICADOS ENTRE PAGOS/APARTADOS */
+    const contadorCartones = {};
+
+    snapshotPagos.forEach(doc => {
+        const data = doc.data();
+        const lista = data.cartones || [];
+
+        lista.forEach(n => {
+            if (!contadorCartones[n]) contadorCartones[n] = [];
+            contadorCartones[n].push(data.nombre || "SIN NOMBRE");
+        });
+    });
+
+    const duplicadosCartones = Object.keys(contadorCartones)
+        .filter(n => contadorCartones[n].length > 1);
+
+    if (duplicadosCartones.length > 0) {
+        let mensaje = "⚠️ CARTONES DUPLICADOS DETECTADOS:\n\n";
+        duplicadosCartones.forEach(n => {
+            mensaje += `• Cartón ${n} vendido a: ${contadorCartones[n].join(", ")}\n`;
+        });
+        alert(mensaje);
+    }
+
+    /* 🔥 RENDER DE TABLAS */
     snapshotPagos.forEach(doc => {
       const data = doc.data();
       const ref = data.referencia;
@@ -282,15 +307,31 @@
     });
 
     document.getElementById('resumen').innerHTML = `
-      <span>Vendidos: <b>${cartonesOrdenados.length}</b></span>
-      <span>Faltantes: <b>${630 - cartonesOrdenados.length}</b></span>
+      <span>Vendidos: <b>${Object.keys(registros).length}</b></span>
+      <span>Faltantes: <b>${TOTAL_CARTONES - Object.keys(registros).length}</b></span>
       ${totalPendientes > 0 ? `<span>Pendientes: <b>${totalPendientes}</b></span>` : ''}
       ${totalApartados > 0 ? `<span>Apartados: <b class="apartado-count">${totalApartados}</b></span>` : ''}
       <span>Monto total: <b>${totalMonto} Bs</b></span>
     `;
   }
 
-  // ✔️ VERIFICACIÓN BANCARIA
+  function actualizarTablaJugadores(registros) {
+    const tbody = document.querySelector('#tablaCartones tbody');
+    tbody.innerHTML = "";
+
+    const cartonesOrdenados = Object.keys(registros).map(Number).sort((a,b)=>a-b);
+
+    cartonesOrdenados.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${c}</td>
+            <td>${registros[c]}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+  }
+
+  /* ✔️ VERIFICACIÓN BANCARIA */
   document.addEventListener("DOMContentLoaded", () => {
       const btnSubirBanco = document.getElementById("btnSubirBanco");
       const inputBanco = document.getElementById("inputBanco");
@@ -348,7 +389,7 @@
     const nuevoPendienteTexto = prompt("Cantidad de pendientes:", pendientesActuales);
     if (nuevoPendienteTexto === null) return; 
 
-    const nuevosCartones = nuevoTexto.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 630);
+    const nuevosCartones = nuevoTexto.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= TOTAL_CARTONES);
     const nuevosPendientes = parseInt(nuevoPendienteTexto) || 0;
 
     const snapshot = await db.collection('registrosCartones').get();
@@ -399,17 +440,22 @@
     } catch (error) { console.error(error); }
   }
 
-  async function borrarRegistros() {
+    async function borrarRegistros() {
     if (!confirm("¿Borrar todos los registros definitivamente?")) return;
     try {
       const batch = db.batch();
+
       const cartonesSnapshot = await db.collection('registrosCartones').get();
       cartonesSnapshot.forEach(doc => batch.delete(doc.ref));
+
       const pagosSnapshot = await db.collection('registrosPagos').get();
       pagosSnapshot.forEach(doc => batch.delete(doc.ref));
+
       await batch.commit();
       cargarRegistros();
-    } catch (error) { console.error(error); }
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   function toggleGestion() {
@@ -439,7 +485,7 @@
     const textoApartados = tablaAtexto(document.getElementById('tablaApartados'));
     const textoCartones = tablaAtexto(document.getElementById('tablaCartones'));
 
-        const finalTexto =
+    const finalTexto =
       '== PAGOS CONFIRMADOS ==\n' +
       textoPagos +
       '\n== APARTADOS ==\n' +
@@ -463,9 +509,23 @@
 <body>
 <div class="content-wrapper">
     <header>
-      <h1>Registro de Cartones (630)</h1>
+      <h1>Registro de Cartones (<span id="totalActualHeader">510</span>)</h1>
       <button class="volver-btn" onclick="window.location.href='index.html'">Volver</button>
     </header>
+
+    <!-- Indicador de configuración actual -->
+    <div id="configInfo" style="
+      text-align:center;
+      margin-bottom:20px;
+      padding:12px;
+      background:#1e1e1e;
+      border-radius:10px;
+      border:1px solid #333;
+      font-size:1.1em;
+    ">
+      <b>Precio actual:</b> <span id="precioActual"></span> Bs —
+      <b>Total cartones:</b> <span id="totalActual"></span>
+    </div>
 
     <div class="button-bar">
       <button id="btnGestion" class="gestion-btn">Gestionar Cartones</button>
