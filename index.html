@@ -302,7 +302,7 @@ nombreInput.addEventListener("input", () => {
     btn.disabled = true;
 
     const ref = refInput.value;
-    if (!(ref === "P" || (ref.length === 6 && /^\d+$/.test(ref)))) {
+    if (!(ref === "a" || (ref.length === 6 && /^\d+$/.test(ref)))) {
       alert("Referencia inválida.");
       btn.disabled = false;
       return;
