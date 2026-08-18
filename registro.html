@@ -195,140 +195,152 @@
   });
 
   async function cargarRegistros() {
-    let registros = {};
-    let totalMonto = 0;
-    let totalPendientes = 0; 
-    let totalApartados = 0;
+      let registros = {};
+      let totalMonto = 0;
+      let totalPendientes = 0; 
+      let totalApartados = 0;
 
-    const referencias = {};
-    const duplicadas = new Set();
+      const referencias = {};
+      const duplicadas = new Set();
 
-    /* 🔥 LISTA DE JUGADORES */
-    db.collection('registrosCartones').onSnapshot(snapshotCartones => {
-        registros = {};
-        snapshotCartones.forEach(doc => {
-            registros[doc.id] = doc.data().nombre;
-        });
-        actualizarTablaJugadores(registros);
-    });
+      /* 🔥 LISTA DE JUGADORES */
+      db.collection('registrosCartones').onSnapshot(snapshotCartones => {
+          registros = {};
+          snapshotCartones.forEach(doc => {
+              registros[doc.id] = doc.data().nombre;
+          });
+          actualizarTablaJugadores(registros);
+      });
 
-    const snapshotPagos = await db.collection('registrosPagos').orderBy('timestamp', 'desc').get();
+      const snapshotPagos = await db.collection('registrosPagos').orderBy('timestamp', 'desc').get();
 
-    /* 🔥 DETECTAR DUPLICADOS DE REFERENCIA */
-    snapshotPagos.forEach(doc => {
-        const ref = doc.data().referencia;
-        if (!referencias[ref]) referencias[ref] = 0;
-        referencias[ref]++;
-        if (referencias[ref] === 2) duplicadas.add(ref);
-    });
+      /* 🔥 DETECTAR DUPLICADOS DE REFERENCIA */
+      snapshotPagos.forEach(doc => {
+          const ref = doc.data().referencia;
+          if (!referencias[ref]) referencias[ref] = 0;
+          referencias[ref]++;
+          if (referencias[ref] === 2) duplicadas.add(ref);
+      });
 
-    const tbodyPagos = document.querySelector('#tablaPagos tbody');
-    const tbodyApartados = document.querySelector('#tablaApartados tbody');
-    tbodyPagos.innerHTML = '';
-    tbodyApartados.innerHTML = '';
+      const tbodyPagos = document.querySelector('#tablaPagos tbody');
+      const tbodyApartados = document.querySelector('#tablaApartados tbody');
+      tbodyPagos.innerHTML = '';
+      tbodyApartados.innerHTML = '';
 
-    /* 🔥 DETECTOR DE CARTONES DUPLICADOS ENTRE PAGOS/APARTADOS */
-    const contadorCartones = {};
+      /* 🔥 DETECTOR DE CARTONES DUPLICADOS ENTRE PAGOS/APARTADOS */
+      const contadorCartones = {};
 
-    snapshotPagos.forEach(doc => {
+      snapshotPagos.forEach(doc => {
+          const data = doc.data();
+          const lista = data.cartones || [];
+
+          lista.forEach(n => {
+              if (!contadorCartones[n]) contadorCartones[n] = [];
+              contadorCartones[n].push(data.nombre || "SIN NOMBRE");
+          });
+      });
+
+      const duplicadosCartones = Object.keys(contadorCartones)
+          .filter(n => contadorCartones[n].length > 1);
+
+      if (duplicadosCartones.length > 0) {
+          let mensaje = "⚠️ CARTONES DUPLICADOS DETECTADOS:\n\n";
+          duplicadosCartones.forEach(n => {
+              mensaje += `• Cartón ${n} vendido a: ${contadorCartones[n].join(", ")}\n`;
+          });
+          alert(mensaje);
+      }
+
+      /* 🔥 RENDER DE TABLAS Y MONTOS SEPARADOS */
+      let montoPagados = 0;
+      let montoDeudas = 0;
+
+      snapshotPagos.forEach(doc => {
         const data = doc.data();
-        const lista = data.cartones || [];
+        const ref = data.referencia;
+        const esNum = esReferenciaNumerica(ref);
+        const esDuplicada = duplicadas.has(ref);
 
-        lista.forEach(n => {
-            if (!contadorCartones[n]) contadorCartones[n] = [];
-            contadorCartones[n].push(data.nombre || "SIN NOMBRE");
-        });
-    });
+        if (!esNum) totalApartados++;
 
-    const duplicadosCartones = Object.keys(contadorCartones)
-        .filter(n => contadorCartones[n].length > 1);
+        const montoActual = parseFloat(data.monto) || 0;
+        totalMonto += montoActual;
 
-    if (duplicadosCartones.length > 0) {
-        let mensaje = "⚠️ CARTONES DUPLICADOS DETECTADOS:\n\n";
-        duplicadosCartones.forEach(n => {
-            mensaje += `• Cartón ${n} vendido a: ${contadorCartones[n].join(", ")}\n`;
-        });
-        alert(mensaje);
-    }
+        if (esNum) {
+            montoPagados += montoActual;
+        } else {
+            montoDeudas += montoActual;
+        }
 
-    /* 🔥 RENDER DE TABLAS */
-    snapshotPagos.forEach(doc => {
-      const data = doc.data();
-      const ref = data.referencia;
-      const esNum = esReferenciaNumerica(ref);
-      const esDuplicada = duplicadas.has(ref);
+        const cartonesStr = (data.cartones?.length > 0) ? data.cartones.join(", ") : "";
+        const numPendientes = data.pendientes || 0;
+        totalPendientes += numPendientes;
 
-      if (!esNum) totalApartados++;
+        const pendienteStr = numPendientes > 0 ? `<span class="carton-pendiente">(+${numPendientes} pnd)</span>` : "";
+        const celdaCartones = (cartonesStr + pendienteStr).trim() || "-";
 
-      totalMonto += parseFloat(data.monto);
-
-      const cartonesStr = (data.cartones?.length > 0) ? data.cartones.join(", ") : "";
-      const numPendientes = data.pendientes || 0;
-      totalPendientes += numPendientes;
-
-      const pendienteStr = numPendientes > 0 ? `<span class="carton-pendiente">(+${numPendientes} pnd)</span>` : "";
-      const celdaCartones = (cartonesStr + pendienteStr).trim() || "-";
-
-      const referenciaHTML = `
-        <td class="${esDuplicada ? 'referencia-duplicada' : ''}">
-          ${ref}${esDuplicada ? ' (D)' : ''}
-        </td>
-      `;
-
-      const botones = `
-        <button class='edit-btn' onclick='editarPago("${doc.id}", ${JSON.stringify(data.cartones || [])}, ${numPendientes})'>Editar</button>
-        <button class='delete-btn' onclick='eliminarPago("${doc.id}", ${JSON.stringify(data.cartones || [])})'>Eliminar</button>
-      `;
-
-      const tr = document.createElement('tr');
-
-      if (esNum) {
-        tr.innerHTML = `
-          <td>${data.monto}</td>
-          ${referenciaHTML}
-          <td>${data.nombre || "-"}</td>
-          <td>${celdaCartones}</td>
-          <td>${botones}</td>
-        `;
-        tbodyPagos.appendChild(tr);
-      } else {
-        tr.innerHTML = `
-          <td>${data.monto}</td>
-          ${referenciaHTML}
-          <td>${data.nombre || "-"}</td>
-          <td>${celdaCartones}</td>
-          <td>
-            <button class='edit-btn' style='background:#607D8B' onclick='editarApartadoReferencia("${doc.id}", "${ref}")'>Ref</button>
-            ${botones}
+        const referenciaHTML = `
+          <td class="${esDuplicada ? 'referencia-duplicada' : ''}">
+            ${ref}${esDuplicada ? ' (D)' : ''}
           </td>
         `;
-        tbodyApartados.appendChild(tr);
-      }
-    });
 
-    document.getElementById('resumen').innerHTML = `
-      <span>Vendidos: <b>${Object.keys(registros).length}</b></span>
-      <span>Faltantes: <b>${TOTAL_CARTONES - Object.keys(registros).length}</b></span>
-      ${totalPendientes > 0 ? `<span>Pendientes: <b>${totalPendientes}</b></span>` : ''}
-      ${totalApartados > 0 ? `<span>Apartados: <b class="apartado-count">${totalApartados}</b></span>` : ''}
-      <span>Monto total: <b>${totalMonto} Bs</b></span>
-    `;
+        const botones = `
+          <button class='edit-btn' onclick='editarPago("${doc.id}", ${JSON.stringify(data.cartones || [])}, ${numPendientes})'>Editar</button>
+          <button class='delete-btn' onclick='eliminarPago("${doc.id}", ${JSON.stringify(data.cartones || [])})'>Eliminar</button>
+        `;
+
+        const tr = document.createElement('tr');
+
+        if (esNum) {
+          tr.innerHTML = `
+            <td>${data.monto}</td>
+            ${referenciaHTML}
+            <td>${data.nombre || "-"}</td>
+            <td>${celdaCartones}</td>
+            <td>${botones}</td>
+          `;
+          tbodyPagos.appendChild(tr);
+        } else {
+          tr.innerHTML = `
+            <td>${data.monto}</td>
+            ${referenciaHTML}
+            <td>${data.nombre || "-"}</td>
+            <td>${celdaCartones}</td>
+            <td>
+              <button class='edit-btn' style='background:#607D8B' onclick='editarApartadoReferencia("${doc.id}", "${ref}")'>Ref</button>
+              ${botones}
+            </td>
+          `;
+          tbodyApartados.appendChild(tr);
+        }
+      });
+
+      document.getElementById('resumen').innerHTML = `
+        <span>Vendidos: <b>${Object.keys(registros).length}</b></span>
+        <span>Faltantes: <b>${TOTAL_CARTONES - Object.keys(registros).length}</b></span>
+        ${totalPendientes > 0 ? `<span>Pendientes: <b>${totalPendientes}</b></span>` : ''}
+        ${totalApartados > 0 ? `<span>Apartados: <b class="apartado-count">${totalApartados}</b></span>` : ''}
+        <span>Pagado: <b>${montoPagados} Bs</b></span>
+        <span>Por cobrar: <b>${montoDeudas} Bs</b></span>
+        <span>Monto total: <b>${totalMonto} Bs</b></span>
+      `;
   }
 
   function actualizarTablaJugadores(registros) {
-    const tbody = document.querySelector('#tablaCartones tbody');
-    tbody.innerHTML = "";
+      const tbody = document.querySelector('#tablaCartones tbody');
+      tbody.innerHTML = "";
 
-    const cartonesOrdenados = Object.keys(registros).map(Number).sort((a,b)=>a-b);
+      const cartonesOrdenados = Object.keys(registros).map(Number).sort((a,b)=>a-b);
 
-    cartonesOrdenados.forEach(c => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${c}</td>
-            <td>${registros[c]}</td>
-        `;
-        tbody.appendChild(tr);
-    });
+      cartonesOrdenados.forEach(c => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+              <td>${c}</td>
+              <td>${registros[c]}</td>
+          `;
+          tbody.appendChild(tr);
+      });
   }
 
   /* ✔️ VERIFICACIÓN BANCARIA */
@@ -380,43 +392,43 @@
   });
 
   async function editarPago(pagoId, cartonesActuales, pendientesActuales) {
-    const pagoDoc = await db.collection('registrosPagos').doc(pagoId).get();
-    const data = pagoDoc.data();
+      const pagoDoc = await db.collection('registrosPagos').doc(pagoId).get();
+      const data = pagoDoc.data();
 
-    const nuevoTexto = prompt("Edita los cartones (separados por coma):", cartonesActuales.join(", "));
-    if (nuevoTexto === null) return; 
+      const nuevoTexto = prompt("Edita los cartones (separados por coma):", cartonesActuales.join(", "));
+      if (nuevoTexto === null) return; 
 
-    const nuevoPendienteTexto = prompt("Cantidad de pendientes:", pendientesActuales);
-    if (nuevoPendienteTexto === null) return; 
+      const nuevoPendienteTexto = prompt("Cantidad de pendientes:", pendientesActuales);
+      if (nuevoPendienteTexto === null) return; 
 
-    const nuevosCartones = nuevoTexto.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= TOTAL_CARTONES);
-    const nuevosPendientes = parseInt(nuevoPendienteTexto) || 0;
+      const nuevosCartones = nuevoTexto.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= TOTAL_CARTONES);
+      const nuevosPendientes = parseInt(nuevoPendienteTexto) || 0;
 
-    const snapshot = await db.collection('registrosCartones').get();
-    const vendidos = new Set();
-    snapshot.forEach(doc => vendidos.add(parseInt(doc.id)));
+      const snapshot = await db.collection('registrosCartones').get();
+      const vendidos = new Set();
+      snapshot.forEach(doc => vendidos.add(parseInt(doc.id)));
 
-    for (let n of nuevosCartones) {
-      if (vendidos.has(n) && !cartonesActuales.includes(n)) {
-        alert(`El cartón ${n} ya está vendido.`);
-        return;
+      for (let n of nuevosCartones) {
+        if (vendidos.has(n) && !cartonesActuales.includes(n)) {
+          alert(`El cartón ${n} ya está vendido.`);
+          return;
+        }
       }
-    }
 
-    const nuevoMonto = (nuevosCartones.length + nuevosPendientes) * PRECIO_CARTON;
+      const nuevoMonto = (nuevosCartones.length + nuevosPendientes) * PRECIO_CARTON;
 
-    const batch = db.batch();
-    cartonesActuales.forEach(n => { if (!nuevosCartones.includes(n)) batch.delete(db.collection('registrosCartones').doc(n.toString())); });
-    nuevosCartones.forEach(n => { if (!cartonesActuales.includes(n)) batch.set(db.collection('registrosCartones').doc(n.toString()), { nombre: data.nombre }); });
-    
-    batch.update(db.collection('registrosPagos').doc(pagoId), { 
-        cartones: nuevosCartones, 
-        pendientes: nuevosPendientes,
-        monto: nuevoMonto.toString() 
-    });
+      const batch = db.batch();
+      cartonesActuales.forEach(n => { if (!nuevosCartones.includes(n)) batch.delete(db.collection('registrosCartones').doc(n.toString())); });
+      nuevosCartones.forEach(n => { if (!cartonesActuales.includes(n)) batch.set(db.collection('registrosCartones').doc(n.toString()), { nombre: data.nombre }); });
+      
+      batch.update(db.collection('registrosPagos').doc(pagoId), { 
+          cartones: nuevosCartones, 
+          pendientes: nuevosPendientes,
+          monto: nuevoMonto.toString() 
+      });
 
-    await batch.commit();
-    cargarRegistros();
+      await batch.commit();
+      cargarRegistros();
   }
 
   async function editarApartadoReferencia(pagoId, referenciaActual) {
@@ -430,72 +442,72 @@
   }
 
   async function eliminarPago(pagoId, cartones) {
-    if (!confirm("¿Deseas eliminar este pago y liberar los cartones?")) return;
-    try {
-      const batch = db.batch();
-      cartones.forEach(n => { batch.delete(db.collection('registrosCartones').doc(n.toString())); });
-      batch.delete(db.collection('registrosPagos').doc(pagoId));
-      await batch.commit();
-      cargarRegistros();
-    } catch (error) { console.error(error); }
+      if (!confirm("¿Deseas eliminar este pago y liberar los cartones?")) return;
+      try {
+        const batch = db.batch();
+        cartones.forEach(n => { batch.delete(db.collection('registrosCartones').doc(n.toString())); });
+        batch.delete(db.collection('registrosPagos').doc(pagoId));
+        await batch.commit();
+        cargarRegistros();
+      } catch (error) { console.error(error); }
   }
 
-    async function borrarRegistros() {
-    if (!confirm("¿Borrar todos los registros definitivamente?")) return;
-    try {
-      const batch = db.batch();
+  async function borrarRegistros() {
+      if (!confirm("¿Borrar todos los registros definitivamente?")) return;
+      try {
+        const batch = db.batch();
 
-      const cartonesSnapshot = await db.collection('registrosCartones').get();
-      cartonesSnapshot.forEach(doc => batch.delete(doc.ref));
+        const cartonesSnapshot = await db.collection('registrosCartones').get();
+        cartonesSnapshot.forEach(doc => batch.delete(doc.ref));
 
-      const pagosSnapshot = await db.collection('registrosPagos').get();
-      pagosSnapshot.forEach(doc => batch.delete(doc.ref));
+        const pagosSnapshot = await db.collection('registrosPagos').get();
+        pagosSnapshot.forEach(doc => batch.delete(doc.ref));
 
-      await batch.commit();
-      cargarRegistros();
-    } catch (error) {
-      console.error(error);
-    }
+        await batch.commit();
+        cargarRegistros();
+      } catch (error) {
+        console.error(error);
+      }
   }
 
   function toggleGestion() {
-    const panel = document.getElementById('gestionPanel');
-    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-    if (panel.style.display === 'block') cargarRegistros();
+      const panel = document.getElementById('gestionPanel');
+      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+      if (panel.style.display === 'block') cargarRegistros();
   }
 
   function copiarTablasAlPortapapeles() {
-    function tablaAtexto(tabla) {
-      let texto = '';
-      const tbody = tabla.querySelector('tbody');
-      if (!tbody) return texto;
-      const filas = tbody.querySelectorAll('tr');
-      filas.forEach(fila => {
-        const celdas = fila.querySelectorAll('td');
-        const filaTexto = Array.from(celdas)
-          .filter((c, idx) => idx < celdas.length - 1)
-          .map(c => c.textContent.trim())
-          .join('\t');
-        if (filaTexto) texto += filaTexto + '\n';
-      });
-      return texto;
-    }
+      function tablaAtexto(tabla) {
+        let texto = '';
+        const tbody = tabla.querySelector('tbody');
+        if (!tbody) return texto;
+        const filas = tbody.querySelectorAll('tr');
+        filas.forEach(fila => {
+          const celdas = fila.querySelectorAll('td');
+          const filaTexto = Array.from(celdas)
+            .filter((c, idx) => idx < celdas.length - 1)
+            .map(c => c.textContent.trim())
+            .join('\t');
+          if (filaTexto) texto += filaTexto + '\n';
+        });
+        return texto;
+      }
 
-    const textoPagos = tablaAtexto(document.getElementById('tablaPagos'));
-    const textoApartados = tablaAtexto(document.getElementById('tablaApartados'));
-    const textoCartones = tablaAtexto(document.getElementById('tablaCartones'));
+      const textoPagos = tablaAtexto(document.getElementById('tablaPagos'));
+      const textoApartados = tablaAtexto(document.getElementById('tablaApartados'));
+      const textoCartones = tablaAtexto(document.getElementById('tablaCartones'));
 
-    const finalTexto =
-      '== PAGOS CONFIRMADOS ==\n' +
-      textoPagos +
-      '\n== APARTADOS ==\n' +
-      textoApartados +
-      '\n== CARTONES VENDIDOS ==\n' +
-      textoCartones;
+      const finalTexto =
+        '== PAGOS CONFIRMADOS ==\n' +
+        textoPagos +
+        '\n== APARTADOS ==\n' +
+        textoApartados +
+        '\n== CARTONES VENDIDOS ==\n' +
+        textoCartones;
 
-    navigator.clipboard
-      .writeText(finalTexto)
-      .then(() => alert('¡Reporte copiado al portapapeles!'));
+      navigator.clipboard
+        .writeText(finalTexto)
+        .then(() => alert('¡Reporte copiado al portapapeles!'));
   }
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -581,4 +593,3 @@
 </div>
 </body>
 </html>
-
