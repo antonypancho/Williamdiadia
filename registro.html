@@ -393,35 +393,72 @@
 
   async function editarPago(pagoId, cartonesActuales, pendientesActuales) {
       const pagoDoc = await db.collection('registrosPagos').doc(pagoId).get();
+      if (!pagoDoc.exists) return alert("El pago no existe.");
       const data = pagoDoc.data();
 
-      const nuevoTexto = prompt("Edita los cartones (separados por coma):", cartonesActuales.join(", "));
-      if (nuevoTexto === null) return; 
+      // 1. Pedir todos los nuevos valores usando prompt con los datos actuales precargados
+      const nuevoNombre = prompt("Edita el nombre del cliente:", data.nombre || "");
+      if (nuevoNombre === null) return;
+
+      const nuevaReferencia = prompt("Edita la referencia de pago (6 dígitos o A):", data.referencia || "");
+      if (nuevaReferencia === null) return;
+
+      const nuevoTextoCartones = prompt("Edita los cartones (separados por coma):", cartonesActuales.join(", "));
+      if (nuevoTextoCartones === null) return;
 
       const nuevoPendienteTexto = prompt("Cantidad de pendientes:", pendientesActuales);
-      if (nuevoPendienteTexto === null) return; 
+      if (nuevoPendienteTexto === null) return;
 
-      const nuevosCartones = nuevoTexto.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= TOTAL_CARTONES);
-      const nuevosPendientes = parseInt(nuevoPendienteTexto) || 0;
+      const nuevoMontoTexto = prompt("Edita el monto total (Bs):", data.monto || "0");
+      if (nuevoMontoTexto === null) return;
 
-      const snapshot = await db.collection('registrosCartones').get();
-      const vendidos = new Set();
-      snapshot.forEach(doc => vendidos.add(parseInt(doc.id)));
+      // 2. Procesar y validar los datos ingresados
+      const nombreLimpio = nuevoNombre.trim();
+      const referenciaLimpia = nuevaReferencia.trim().toUpperCase();
 
-      for (let n of nuevosCartones) {
-        if (vendidos.has(n) && !cartonesActuales.includes(n)) {
-          alert(`El cartón ${n} ya está vendido.`);
-          return;
-        }
+      if (!(referenciaLimpia === "A" || (referenciaLimpia.length === 6 && /^\d+$/.test(referenciaLimpia)))) {
+          return alert("Referencia inválida. Debe ser 'A' o exactamente 6 dígitos numéricos.");
       }
 
-      const nuevoMonto = (nuevosCartones.length + nuevosPendientes) * PRECIO_CARTON;
+      const nuevosCartones = nuevoTextoCartones.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= TOTAL_CARTONES);
+      const nuevosPendientes = parseInt(nuevoPendienteTexto) || 0;
+      const nuevoMonto = parseFloat(nuevoMontoTexto) || 0;
 
+      // 3. Verificar que los nuevos cartones no estén ocupados por otro cliente
+      const snapshot = await db.collection('registrosCartones').get();
+      const vendidos = new Set();
+      snapshot.forEach(doc => {
+          // Si el cartón pertenece a este mismo pago, permitimos mantenerlo
+          if (doc.data().nombre !== data.nombre || !cartonesActuales.includes(parseInt(doc.id))) {
+              vendidos.add(parseInt(doc.id));
+          }
+      });
+
+      for (let n of nuevosCartones) {
+          if (vendidos.has(n)) {
+              return alert(`El cartón ${n} ya está vendido a otra persona.`);
+          }
+      }
+
+      // 4. Ejecutar la actualización en Firebase usando un Batch
       const batch = db.batch();
-      cartonesActuales.forEach(n => { if (!nuevosCartones.includes(n)) batch.delete(db.collection('registrosCartones').doc(n.toString())); });
-      nuevosCartones.forEach(n => { if (!cartonesActuales.includes(n)) batch.set(db.collection('registrosCartones').doc(n.toString()), { nombre: data.nombre }); });
+
+      // Liberar cartones viejos que ya no estén en la nueva lista
+      cartonesActuales.forEach(n => { 
+          if (!nuevosCartones.includes(n)) { 
+              batch.delete(db.collection('registrosCartones').doc(n.toString())); 
+          } 
+      });
+
+      // Asignar los nuevos cartones con el nombre actualizado
+      nuevosCartones.forEach(n => { 
+          batch.set(db.collection('registrosCartones').doc(n.toString()), { nombre: nombreLimpio }); 
+      });
       
+      // Actualizar el documento de pago con todos los campos modificados
       batch.update(db.collection('registrosPagos').doc(pagoId), { 
+          nombre: nombreLimpio,
+          referencia: referenciaLimpia,
           cartones: nuevosCartones, 
           pendientes: nuevosPendientes,
           monto: nuevoMonto.toString() 
@@ -435,7 +472,7 @@
       const nuevaReferencia = prompt(`Editar la referencia para el apartado "${referenciaActual}":`, referenciaActual);
       if (nuevaReferencia && nuevaReferencia.trim()) {
           try {
-              await db.collection('registrosPagos').doc(pagoId).update({ referencia: nuevaReferencia.trim() });
+              await db.collection('registrosPagos').doc(pagoId).update({ referencia: nuevaReferencia.trim().toUpperCase() });
               cargarRegistros();
           } catch (error) { console.error(error); }
       }
