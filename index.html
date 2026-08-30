@@ -98,11 +98,14 @@
     Copiar No Disponibles
   </button>
 
-  <button id="azarBtn" type="button"
-    style="margin-top:10px; width:100%; padding:12px; border:none; border-radius:10px;
-    background:#2196F3; color:white; font-weight:900; cursor:pointer;">
-    +1 AZAR
-  </button>
+  <div style="display: flex; gap: 10px; margin-top: 10px;">
+    <input type="number" id="cantidadAzarInput" value="1" min="1" style="width: 100px; text-align: center; margin: 0;" />
+    <button id="azarBtn" type="button"
+      style="flex: 1; padding: 12px; border: none; border-radius: 10px;
+      background: #2196F3; color: white; font-weight: 900; cursor: pointer; margin: 0;">
+      +AZAR
+    </button>
+  </div>
 
   <label>Cartones Pendientes:</label>
   <input type="number" id="pendientes" value="0" min="0" />
@@ -197,10 +200,37 @@ nombreInput.addEventListener("input", () => {
     });
   };
 
-  document.getElementById("azarBtn").addEventListener("click", e => {
+  document.getElementById("azarBtn").onclick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-  });
+
+    const cantidadDeseada = parseInt(document.getElementById("cantidadAzarInput").value) || 1;
+    
+    const disponibles = [];
+    for (let i = 1; i <= TOTAL_CARTONES; i++) {
+      if (!vendidos.has(i) && !seleccionados.has(i)) disponibles.push(i);
+    }
+
+    if (disponibles.length === 0) {
+      return alert("No quedan cartones disponibles.");
+    }
+
+    if (cantidadDeseada > disponibles.length) {
+      alert(`Solo quedan ${disponibles.length} cartones disponibles. Se seleccionarán todos los restantes.`);
+    }
+
+    // Mezclar el array de disponibles al azar
+    for (let i = disponibles.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [disponibles[i], disponibles[j]] = [disponibles[j], disponibles[i]];
+    }
+
+    // Tomar la cantidad solicitada y seleccionarlos
+    const seleccionadosAlAzar = disponibles.slice(0, cantidadDeseada);
+    seleccionadosAlAzar.forEach(n => seleccionados.add(n));
+    
+    actualizarInputDesdeSeleccion();
+  };
 
   async function cargarVendidos() {
     db.collection('registrosCartones').onSnapshot(snap => {
